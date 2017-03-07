@@ -16,6 +16,7 @@
 from __future__ import print_function
 
 import argparse
+import collections
 import csv
 import datetime
 import io
@@ -130,19 +131,19 @@ class LanguageTeam(object):
 
 class User(object):
 
+    trans_fields = ['total', 'translated', 'needReview',
+                    'approved', 'rejected']
+    review_fields = ['total', 'approved', 'rejected']
+
     def __init__(self, user_id, language_code):
         self.user_id = user_id
         self.lang = language_code
-        self.translation_stats = {}
-        self.review_stats = {}
+        self.stats = collections.defaultdict(dict)
 
     def __str__(self):
-        return ("<%s: user_id=%s, lang=%s, "
-                "translation_stats=%s, review_stats=%s" %
+        return ("<%s: user_id=%s, lang=%s, stats=%s" %
                 (self.__class__.__name__,
-                 self.user_id, self.lang,
-                 self.translation_stats,
-                 self.review_stats))
+                 self.user_id, self.lang, self.stats,))
 
     def __repr__(self):
         return repr(self.convert_to_serializable_data())
@@ -153,7 +154,7 @@ class User(object):
         else:
             return self.user_id < other.user_id
 
-    def read_from_zanata_stats(self, zanata_stats):
+    def read_from_zanata_stats(self, zanata_stats, project_id, version):
         # data format (Zanata 3.9.6)
         # {
         #     "username": "amotoki",
@@ -179,28 +180,43 @@ class User(object):
             return
 
         stats = stats[0]
-        trans_stats = stats.get('translation-stats')
+        trans_stats = stats.get('translation-stats', {})
         if trans_stats:
             trans_stats['total'] = sum(trans_stats.values())
-            self.translation_stats = trans_stats
-        review_stats = stats.get('review-stats')
+        review_stats = stats.get('review-stats', {})
         if review_stats:
             review_stats['total'] = sum(review_stats.values())
-            self.review_stats = review_stats
+        self.stats[project_id][version] = {'translation-stats': trans_stats,
+                                           'review-stats': review_stats}
+
+    def populate_total_stats(self):
+
+        total_trans = dict([(k, 0) for k in self.trans_fields])
+        total_review = dict([(k, 0) for k in self.review_fields])
+
+        for project_id, versions in self.stats.items():
+            for version, stats in versions.items():
+                trans_stats = stats.get('translation-stats', {})
+                for k in self.trans_fields:
+                    total_trans[k] += trans_stats.get(k, 0)
+                review_stats = stats.get('review-stats', {})
+                for k in self.review_fields:
+                    total_review[k] += review_stats.get(k, 0)
+        self.stats['__total__']['translation-stats'] = total_trans
+        self.stats['__total__']['review-stats'] = total_review
 
     def needs_output(self, include_no_activities):
         if include_no_activities:
             return True
-        elif self.translation_stats or self.review_stats:
-            return True
-        else:
-            return False
+        return bool(self.stats) and all(self.stats.values())
 
     @staticmethod
     def get_flattened_data_title():
         return [
             'user_id',
             'lang',
+            'project',
+            'version',
             'translation-total',
             'translated',
             'needReview',
@@ -211,25 +227,37 @@ class User(object):
             'review-rejected'
         ]
 
-    def convert_to_flattened_data(self):
-        return [
-            self.user_id,
-            self.lang,
-            self.translation_stats.get('total', 0),
-            self.translation_stats.get('translated', 0),
-            self.translation_stats.get('needReview', 0),
-            self.translation_stats.get('approved', 0),
-            self.translation_stats.get('rejected', 0),
-            self.review_stats.get('total', 0),
-            self.review_stats.get('approved', 0),
-            self.review_stats.get('rejected', 0),
-        ]
+    def convert_to_flattened_data(self, detail=False):
+        self.populate_total_stats()
 
-    def convert_to_serializable_data(self):
+        data = []
+
+        for project_id, versions in self.stats.items():
+            if project_id == '__total__':
+                continue
+            for version, stats in versions.items():
+                trans_stats = stats.get('translation-stats', {})
+                review_stats = stats.get('review-stats', {})
+                if detail:
+                    data.append(
+                        [self.user_id, self.lang, project_id, version] +
+                        [trans_stats.get(k, 0) for k in self.trans_fields] +
+                        [review_stats.get(k, 0) for k in self.review_fields])
+
+        data.append([self.user_id, self.lang, '-', '-'] +
+                    [self.stats['__total__']['translation-stats'][k]
+                     for k in self.trans_fields] +
+                    [self.stats['__total__']['review-stats'][k]
+                     for k in self.review_fields])
+
+        return data
+
+    def convert_to_serializable_data(self, detail):
+        self.populate_total_stats()
         return {'user_id': self.user_id,
                 'lang': self.lang,
-                'translation-stats': self.translation_stats,
-                'review-stats': self.review_stats}
+                'stats': (self.stats if detail
+                          else self.stats['__total__'])}
 
 
 def get_zanata_stats(start_date, end_date, language_teams, project_list,
@@ -257,39 +285,40 @@ def get_zanata_stats(start_date, end_date, language_teams, project_list,
                          'version': version,
                          'user_id': user.user_id,
                          'user_lang': user.lang})
-                statisticdata = zanataUtil.get_user_stats(
+                data = zanataUtil.get_user_stats(
                     project_id, version, user.user_id, start_date, end_date)
-                print('Got: %s' % statisticdata)
-                user.read_from_zanata_stats(statisticdata)
+                print('Got: %s' % data)
+                user.read_from_zanata_stats(data, project_id, version)
                 print('=> %s' % user)
 
     return users
 
 
 def write_stats_to_file(users, output_file, file_format,
-                        include_no_activities):
-    stats = sorted([user for user in users
+                        include_no_activities, detail):
+    users = sorted([user for user in users
                     if user.needs_output(include_no_activities)])
     if file_format == 'csv':
-        _write_stats_to_csvfile(stats, output_file)
+        _write_stats_to_csvfile(users, output_file, detail)
     else:
-        _write_stats_to_jsonfile(stats, output_file)
+        _write_stats_to_jsonfile(users, output_file, detail)
     print('Stats has been written to %s' % output_file)
 
 
-def _write_stats_to_csvfile(stats, output_file):
+def _write_stats_to_csvfile(users, output_file, detail):
     mode = 'w' if six.PY3 else 'wb'
     with open(output_file, mode) as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(User.get_flattened_data_title())
-        for stat in stats:
-            writer.writerow(stat.convert_to_flattened_data())
+        for user in users:
+            writer.writerows(user.convert_to_flattened_data(detail))
 
 
-def _write_stats_to_jsonfile(stats, output_file):
-    stats = [stat.convert_to_serializable_data() for stat in stats]
+def _write_stats_to_jsonfile(users, output_file, detail):
+    users = [user.convert_to_serializable_data(detail)
+             for user in users]
     with open(output_file, 'w') as f:
-        f.write(json.dumps(stats, indent=4, sort_keys=True))
+        f.write(json.dumps(users, indent=4, sort_keys=True))
 
 
 def _comma_separated_list(s):
@@ -327,7 +356,6 @@ def main():
                               "Otherwise all languages are processed."))
     parser.add_argument("-t", "--target-version",
                         type=_comma_separated_list,
-                        required=True,
                         help=("Specify version(s). Comma-separated list. "
                               "Otherwise all available versions are "
                               "processed."))
@@ -335,6 +363,11 @@ def main():
                         type=_comma_separated_list,
                         help=("Specify user(s). Comma-separated list. "
                               "Otherwise all users are processed."))
+    parser.add_argument('--detail',
+                        action='store_true',
+                        help=("If specified, statistics per project "
+                              "and version are output in addition to "
+                              "total statistics."))
     parser.add_argument("--include-no-activities",
                         action='store_true',
                         help=("If specified, stats for users with no "
@@ -348,13 +381,6 @@ def main():
                         help="YAML file of the user list")
     options = parser.parse_args()
 
-    # Currently only single version is supported
-    # due to the implemenation. (bug 1670640)
-    if len(options.target_version) > 1 or len(options.project) > 1:
-        print('It is not supported to specify multiple target versions or '
-              'multiple projects',
-              file=sys.stderr)
-        sys.exit(1)
     versions = [v.replace('/', '-') for v in options.target_version]
 
     language_teams = LanguageTeam.load_from_language_team_yaml(
@@ -368,7 +394,8 @@ def main():
                    'zanata_stats_output.%s' % options.format)
 
     write_stats_to_file(users, output_file, options.format,
-                        options.include_no_activities)
+                        options.include_no_activities,
+                        options.detail)
 
 
 if __name__ == '__main__':
