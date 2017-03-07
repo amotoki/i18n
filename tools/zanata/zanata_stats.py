@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import print_function
+
 import argparse
 import csv
 import datetime
@@ -290,6 +292,7 @@ def main():
                               "Default: zanata_stats_output.{csv,json}."))
     parser.add_argument("-p", "--project",
                         type=_comma_separated_list,
+                        required=True,
                         help=("Specify project(s). Comma-separated list. "
                               "Otherwise all Zanata projects are processed."))
     parser.add_argument("-l", "--lang",
@@ -299,6 +302,7 @@ def main():
                               "Otherwise all languages are processed."))
     parser.add_argument("-t", "--target-version",
                         type=_comma_separated_list,
+                        required=True,
                         help=("Specify version(s). Comma-separated list. "
                               "Otherwise all available versions are "
                               "processed."))
@@ -321,9 +325,17 @@ def main():
 
     language_teams = read_language_team_yaml(options.user_yaml, options.lang)
 
+    # Currently only single version is supported
+    # due to the implemenation. (bug 1670640)
+    if len(options.target_version) > 1 or len(options.project) > 1:
+        print('It is not supported to specify multiple target versions or '
+              'multiple projects',
+              file=sys.stderr)
+        sys.exit(1)
+    versions = [v.replace('/', '-') for v in options.target_version]
     users = get_zanata_stats(options.start_date, options.end_date,
                              language_teams, options.project,
-                             options.target_version, options.user)
+                             versions, options.user)
 
     output_file = (options.output_file or
                    'zanata_stats_output.%s' % options.format)
