@@ -13,25 +13,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import print_function
-
 import argparse
 import collections
 import csv
 import datetime
 import io
 import json
+import logging
 import random
 import re
 import sys
 
-from oslo_log import log as logging
 import requests
 import six
 import yaml
 
 ZANATA_URI = 'https://translate.openstack.org/rest/%s'
-LOG = logging.getLogger(__name__)
+LOG = logging.getLogger('zanata_stats')
 
 ZANATA_VERSION_PATTERN = re.compile(r'^(master[-,a-z]*|stable-[a-z]+)$')
 
@@ -53,9 +51,8 @@ class ZanataUtility(object):
             req = requests.get(uri, headers=headers)
             return req.text
         except Exception as e:
-            print('exception happen', e)
-            LOG.warning('Error "%(error)s" while reading uri %(uri)s',
-                        {'error': e, 'uri': uri})
+            LOG.error('Error "%(error)s" while reading uri %(uri)s',
+                      {'error': e, 'uri': uri})
             raise
 
     def read_json_from_uri(self, uri):
@@ -63,8 +60,8 @@ class ZanataUtility(object):
         try:
             return json.loads(data)
         except Exception as e:
-            LOG.warning('Error "%(error)s" parsing json from uri %(uri)s',
-                        {'error': e, 'uri': uri})
+            LOG.error('Error "%(error)s" parsing json from uri %(uri)s',
+                      {'error': e, 'uri': uri})
             raise
 
     def get_projects(self):
@@ -119,9 +116,9 @@ class LanguageTeam(object):
             lang_notfound = [lang_code for lang_code in lang_list
                              if lang_code not in content]
             if lang_notfound:
-                print('Language %s not tound in %s.' %
-                      (', '.join(lang_notfound),
-                       translation_team_uri))
+                LOG.error('Language %s not tound in %s.',
+                          ', '.join(lang_notfound),
+                          translation_team_uri)
                 sys.exit(1)
 
         return [cls(lang_code, team_info)
@@ -262,8 +259,8 @@ class User(object):
 
 def get_zanata_stats(start_date, end_date, language_teams, project_list,
                      version_list, user_list):
-    print('Getting Zanata contributors statistics (from %s to %s) ...' %
-          (start_date, end_date))
+    LOG.info('Getting Zanata contributors statistics (from %s to %s) ...',
+             start_date, end_date)
     zanataUtil = ZanataUtility()
     users = []
     for team in language_teams:
@@ -279,17 +276,17 @@ def get_zanata_stats(start_date, end_date, language_teams, project_list,
             for user in users:
                 if user_list and user.user_id not in user_list:
                     continue
-                print('Getting %(project_id)s %(version)s '
-                      'for user %(user_id)s %(user_lang)s'
-                      % {'project_id': project_id,
-                         'version': version,
-                         'user_id': user.user_id,
-                         'user_lang': user.lang})
+                LOG.info('Getting %(project_id)s %(version)s '
+                         'for user %(user_id)s %(user_lang)s',
+                         {'project_id': project_id,
+                          'version': version,
+                          'user_id': user.user_id,
+                          'user_lang': user.lang})
                 data = zanataUtil.get_user_stats(
                     project_id, version, user.user_id, start_date, end_date)
-                print('Got: %s' % data)
+                LOG.debug('Got: %s', data)
                 user.read_from_zanata_stats(data, project_id, version)
-                print('=> %s' % user)
+                LOG.debug('=> %s', user)
 
     return users
 
@@ -302,7 +299,7 @@ def write_stats_to_file(users, output_file, file_format,
         _write_stats_to_csvfile(users, output_file, detail)
     else:
         _write_stats_to_jsonfile(users, output_file, detail)
-    print('Stats has been written to %s' % output_file)
+    LOG.info('Stats has been written to %s', output_file)
 
 
 def _write_stats_to_csvfile(users, output_file, detail):
@@ -377,9 +374,21 @@ def main():
     parser.add_argument("-f", "--format",
                         default='csv', choices=['csv', 'json'],
                         help="Output file format.")
+    parser.add_argument("--debug",
+                        action='store_true',
+                        help="Enable debug message.")
     parser.add_argument("user_yaml",
                         help="YAML file of the user list")
+
     options = parser.parse_args()
+
+    logging_level = logging.DEBUG if options.debug else logging.INFO
+    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    handler = logging.StreamHandler()
+    handler.setLevel(logging_level)
+    handler.setFormatter(formatter)
+    LOG.setLevel(logging_level)
+    LOG.addHandler(handler)
 
     versions = [v.replace('/', '-') for v in options.target_version]
 
