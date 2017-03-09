@@ -132,7 +132,7 @@ def collect_zanata_language_and_members():
     return result
 
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-o", "--output-file",
                         default="translation_team.yaml",
@@ -144,3 +144,7 @@ if __name__ == '__main__':
     data = collect_zanata_language_and_members()
     save_to_yaml(data, output_file)
     print("output is saved to filename: %s" % output_file)
+
+
+if __name__ == '__main__':
+    main()
