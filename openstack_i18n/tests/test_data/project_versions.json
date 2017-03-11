@@ -1,0 +1,57 @@
+{
+    "status": "ACTIVE",
+    "name": "aodh",
+    "iterations": [
+        {
+            "status": "ACTIVE",
+            "projectType": "Gettext",
+            "id": "master",
+            "links": [
+                {
+                    "href": "iterations/i/master",
+                    "type": "application/vnd.zanata.project.iteration+json",
+                    "rel": "self"
+                }
+            ]
+        },
+        {
+            "status": "OBSOLETE",
+            "projectType": "Gettext",
+            "id": "stable-liberty_.-57136338",
+            "links": [
+                {
+                    "href": "iterations/i/stable-liberty_.-57136338",
+                    "type": "application/vnd.zanata.project.iteration+json",
+                    "rel": "self"
+                }
+            ]
+        },
+        {
+            "status": "READONLY",
+            "projectType": "Gettext",
+            "id": "stable-liberty",
+            "links": [
+                {
+                    "href": "iterations/i/stable-liberty",
+                    "type": "application/vnd.zanata.project.iteration+json",
+                    "rel": "self"
+                }
+            ]
+        },
+        {
+            "status": "READONLY",
+            "projectType": "Gettext",
+            "id": "stable-newton",
+            "links": [
+                {
+                    "href": "iterations/i/stable-newton",
+                    "type": "application/vnd.zanata.project.iteration+json",
+                    "rel": "self"
+                }
+            ]
+        }
+    ],
+    "defaultType": "Gettext",
+    "id": "aodh",
+    "description": "Aodh"
+}

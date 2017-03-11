@@ -28,7 +28,7 @@ import requests
 import six
 import yaml
 
-ZANATA_URI = 'https://translate.openstack.org/rest/%s'
+ZANATA_URI = 'https://translate.openstack.org/rest/'
 LOG = logging.getLogger('zanata_stats')
 
 ZANATA_VERSION_PATTERN = re.compile(r'^(master[-,a-z]*|stable-[a-z]+)$')
@@ -44,6 +44,9 @@ class ZanataUtility(object):
         'Mozilla/5.0 (Macintosh; Intel Mac OS X) Chrome/37.0.2062.120',
         'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko'
     ]
+
+    def __init__(self, base_uri=None):
+        self.base_uri = base_uri or ZANATA_URI
 
     def read_uri(self, uri, headers):
         try:
@@ -65,7 +68,7 @@ class ZanataUtility(object):
             raise
 
     def get_projects(self):
-        uri = ZANATA_URI % ('projects')
+        uri = self.base_uri + 'projects'
         LOG.debug("Reading projects from %s" % uri)
         projects_data = self.read_json_from_uri(uri)
         return [project['id'] for project in projects_data]
@@ -75,7 +78,7 @@ class ZanataUtility(object):
         return bool(ZANATA_VERSION_PATTERN.match(version))
 
     def get_project_versions(self, project_id):
-        uri = ZANATA_URI % ('projects/p/%s' % project_id)
+        uri = self.base_uri + 'projects/p/%s' % project_id
         LOG.debug("Reading iterations for project %s" % project_id)
         project_data = self.read_json_from_uri(uri)
         if 'iterations' in project_data:
@@ -87,9 +90,10 @@ class ZanataUtility(object):
 
     def get_user_stats(self, project_id, iteration_id, zanata_user_id,
                        start_date, end_date):
-        uri = ZANATA_URI % ('stats/project/%s/version/%s/contributor/%s/%s..%s'
-                            % (project_id, iteration_id, zanata_user_id,
-                               start_date, end_date))
+        uri = (self.base_uri +
+               'stats/project/%s/version/%s/contributor/%s/%s..%s'
+               % (project_id, iteration_id, zanata_user_id,
+                  start_date, end_date))
         return self.read_json_from_uri(uri)
 
 
@@ -249,7 +253,7 @@ class User(object):
 
         return data
 
-    def convert_to_serializable_data(self, detail):
+    def convert_to_serializable_data(self, detail=False):
         self.populate_total_stats()
         return {'user_id': self.user_id,
                 'lang': self.lang,

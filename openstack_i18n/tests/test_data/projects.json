@@ -1,0 +1,41 @@
+[
+    {
+        "status": "ACTIVE",
+        "defaultType": "Gettext",
+        "id": "aodh",
+        "links": [
+            {
+                "href": "p/aodh",
+                "type": "application/vnd.zanata.project+json",
+                "rel": "self"
+            }
+        ],
+        "name": "aodh"
+    },
+    {
+        "status": "ACTIVE",
+        "defaultType": "Gettext",
+        "id": "api-site",
+        "links": [
+            {
+                "href": "p/api-site",
+                "type": "application/vnd.zanata.project+json",
+                "rel": "self"
+            }
+        ],
+        "name": "api-site"
+    },
+    {
+        "status": "ACTIVE",
+        "defaultType": "Gettext",
+        "id": "barbican",
+        "links": [
+            {
+                "href": "p/barbican",
+                "type": "application/vnd.zanata.project+json",
+                "rel": "self"
+            }
+        ],
+        "name": "barbican"
+    }
+]

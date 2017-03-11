@@ -1,0 +1,18 @@
+{
+  "username": "amotoki",
+  "contributions": [
+    {
+      "locale": "ja",
+      "translation-stats": {
+        "translated": 3,
+        "needReview": 6,
+        "approved": 27,
+        "rejected": 1
+      },
+      "review-stats": {
+        "approved": 277,
+        "rejected": 10
+      }
+    }
+  ]
+}
